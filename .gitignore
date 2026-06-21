@@ -1,0 +1,20 @@
+# Credentials — never commit
+.env
+
+# Compiled output
+bin/
+*.class
+
+# Dependency jars (keep lib/ tracked but ignore any local additions)
+lib/*.jar
+
+# IDE files
+.vscode/
+.idea/
+*.iml
+*.project
+*.classpath
+
+# OS files
+.DS_Store
+Thumbs.db

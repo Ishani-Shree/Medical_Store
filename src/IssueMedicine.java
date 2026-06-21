@@ -1,145 +1,257 @@
 import javax.swing.*;
+import javax.swing.border.Border;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.*;
 import java.util.ArrayList;
-import javax.swing.border.Border;
 
 public class IssueMedicine extends JFrame {
-    private static final int FRAME_WIDTH = 650;
+    private static final int FRAME_WIDTH  = 650;
     private static final int FRAME_HEIGHT = 800;
 
-    private JTextField mobileField, doctorIdField, quantityField;
+    private JTextField        mobileField, doctorIdField, quantityField;
     private JComboBox<String> medicineDropdown;
-    private JTextArea medicationListArea;
-    private JButton addMedicineButton, resetButton, generateBillButton;
-    private JLabel patientNameLabel, NameLabel;
-    private Connection conn;
-
+    private JTextArea         medicationListArea;
+    private JButton           addMedicineButton, resetButton, generateBillButton;
+    private JLabel            NameLabel;
+    private Connection        conn;
     private ArrayList<String> medications;
 
+    // Each dropdown is just a window + model + list kept together
+    private final DropSet mobileDrop = new DropSet();
+    private final DropSet doctorDrop = new DropSet();
+    private boolean ignoreMobile = false;
+    private boolean ignoreDoctor = false;
+
+    private static class DropSet {
+        JWindow              win;
+        DefaultListModel<String> model = new DefaultListModel<>();
+        JList<String>        list  = new JList<>(model);
+    }
+
     public IssueMedicine(Connection conn) {
-        this.conn = conn;
+        this.conn       = conn;
         this.medications = new ArrayList<>();
 
-        // Frame settings
         setTitle("Issue Medicine");
         setSize(FRAME_WIDTH, FRAME_HEIGHT);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
-        // Background Panel
-        JPanel backgroundPanel = new JPanel();
-        backgroundPanel.setLayout(null);
-        backgroundPanel.setBackground(Color.LIGHT_GRAY);
-        add(backgroundPanel);
+        JPanel bg = new JPanel(null);
+        bg.setBackground(Color.LIGHT_GRAY);
+        add(bg);
 
-        int padding = 20;
-        int labelWidth = FRAME_WIDTH / 3;
-        int fieldWidth = FRAME_WIDTH - (labelWidth + 3 * padding);
-        int rowHeight = 40;
-        int topMargin = 30;
+        int pad    = 20;
+        int labelW = FRAME_WIDTH / 3;
+        int fieldW = FRAME_WIDTH - (labelW + 3 * pad);
+        int rowH   = 40;
+        int top    = 30;
 
-        // Mobile Number FieldL
-        mobileField = createRoundedTextField();
-        mobileField.setOpaque(false);
-        JLabel mobileLabel = createLabel("Mobile No.:");
-        mobileLabel.setBounds(padding, topMargin, labelWidth, rowHeight);
-        backgroundPanel.add(mobileLabel);
-        mobileField.setBounds(labelWidth, topMargin, fieldWidth, rowHeight);
-        backgroundPanel.add(mobileField);
+        // Mobile field
+        addLabel(bg, "Mobile No.:", pad, top, labelW, rowH);
+        mobileField = roundedField();
+        mobileField.setBounds(labelW, top, fieldW, rowH);
+        bg.add(mobileField);
 
-        // Patient Name Field
-        patientNameLabel = new JLabel("Patient Name: ");
-        patientNameLabel.setFont(new Font("Arial", Font.BOLD, 16));
-        patientNameLabel.setBounds(padding, topMargin + rowHeight + padding, FRAME_WIDTH - (2 * padding), rowHeight);
-        backgroundPanel.add(patientNameLabel);
-
-        // Name Field
+        // Patient name display
+        addLabel(bg, "Patient Name:", pad, top + rowH + pad, labelW, rowH);
         NameLabel = new JLabel("Not Found");
         NameLabel.setFont(new Font("Arial", Font.BOLD, 16));
-        NameLabel.setBounds(labelWidth, topMargin + rowHeight + padding, FRAME_WIDTH - (2 * padding), rowHeight);
-        backgroundPanel.add(NameLabel);
+        NameLabel.setBounds(labelW, top + rowH + pad, FRAME_WIDTH - 2 * pad, rowH);
+        bg.add(NameLabel);
 
-        // Doctor ID Field
-        doctorIdField = createRoundedTextField();
-        doctorIdField.setOpaque(false);
-        JLabel doctorIdLabel = createLabel("Doctor ID:");
-        doctorIdLabel.setBounds(padding, topMargin + 2 * (rowHeight + padding), labelWidth, rowHeight);
-        backgroundPanel.add(doctorIdLabel);
-        doctorIdField.setBounds(labelWidth, topMargin + 2 * (rowHeight + padding), fieldWidth, rowHeight);
-        backgroundPanel.add(doctorIdField);
+        // Doctor ID field
+        addLabel(bg, "Doctor ID:", pad, top + 2 * (rowH + pad), labelW, rowH);
+        doctorIdField = roundedField();
+        doctorIdField.setBounds(labelW, top + 2 * (rowH + pad), fieldW, rowH);
+        bg.add(doctorIdField);
 
-        // Medicine Lable
-        JLabel medicineLabel = createLabel("Medicine:");
-        medicineLabel.setBounds(padding, topMargin + 3 * (rowHeight + padding), labelWidth, rowHeight);
-        backgroundPanel.add(medicineLabel);
-
-        // Medicine Dropdown
+        // Medicine dropdown
+        addLabel(bg, "Medicine:", pad, top + 3 * (rowH + pad), labelW, rowH);
         medicineDropdown = new JComboBox<>();
-        populateMedicineDropdown(); // Fetch medicines from the database
+        populateMedicineDropdown();
         medicineDropdown.setFont(new Font("Arial", Font.PLAIN, 16));
-        medicineDropdown.setBounds(labelWidth, topMargin + 3 * (rowHeight + padding), fieldWidth, rowHeight);
-        backgroundPanel.add(medicineDropdown);
+        medicineDropdown.setBounds(labelW, top + 3 * (rowH + pad), fieldW, rowH);
+        bg.add(medicineDropdown);
 
-        // Quantity Field
-        quantityField = createRoundedTextField();
-        quantityField.setOpaque(false);
-        JLabel quantityLabel = createLabel("Quantity:");
-        quantityLabel.setBounds(padding, topMargin + 4 * (rowHeight + padding), labelWidth, rowHeight);
-        backgroundPanel.add(quantityLabel);
-        quantityField.setBounds(labelWidth, topMargin + 4 * (rowHeight + padding), fieldWidth, rowHeight);
-        backgroundPanel.add(quantityField);
+        // Quantity field
+        addLabel(bg, "Quantity:", pad, top + 4 * (rowH + pad), labelW, rowH);
+        quantityField = roundedField();
+        quantityField.setBounds(labelW, top + 4 * (rowH + pad), fieldW, rowH);
+        bg.add(quantityField);
 
-        // Add Medicine Button
+        // Add Medicine button
         addMedicineButton = new JButton("Add Medicine");
         addMedicineButton.setFont(new Font("Arial", Font.BOLD, 16));
-        addMedicineButton.setBounds(labelWidth, topMargin + 5 * (rowHeight + padding), fieldWidth / 2, rowHeight);
+        addMedicineButton.setBounds(labelW, top + 5 * (rowH + pad), fieldW / 2, rowH);
         addMedicineButton.setEnabled(false);
-        backgroundPanel.add(addMedicineButton);
+        bg.add(addMedicineButton);
 
-        // Medication List Area
+        // Medication list
         medicationListArea = new JTextArea();
         medicationListArea.setEditable(false);
         medicationListArea.setFont(new Font("Arial", Font.PLAIN, 16));
-        JScrollPane scrollPane = new JScrollPane(medicationListArea);
-        scrollPane.setBounds(padding, topMargin + 6 * (rowHeight + padding), FRAME_WIDTH - (3*padding), 250);
-        backgroundPanel.add(scrollPane);
+        JScrollPane scroll = new JScrollPane(medicationListArea);
+        scroll.setBounds(pad, top + 6 * (rowH + pad), FRAME_WIDTH - 3 * pad, 200);
+        bg.add(scroll);
 
         // Buttons
         resetButton = new JButton("Reset");
         resetButton.setFont(new Font("Arial", Font.BOLD, 16));
-        resetButton.setBounds(3*padding, FRAME_HEIGHT - 3 * rowHeight, 120, rowHeight);
-        backgroundPanel.add(resetButton);
+        resetButton.setBounds(3 * pad, FRAME_HEIGHT - 3 * rowH, 120, rowH);
+        bg.add(resetButton);
 
         generateBillButton = new JButton("Generate Bill");
         generateBillButton.setFont(new Font("Arial", Font.BOLD, 16));
-        generateBillButton.setBounds(FRAME_WIDTH/2 + 77, FRAME_HEIGHT - 3 * rowHeight, fieldWidth/2, rowHeight);
-        backgroundPanel.add(generateBillButton);
+        generateBillButton.setBounds(FRAME_WIDTH / 2 + 77, FRAME_HEIGHT - 3 * rowH, fieldW / 2, rowH);
+        bg.add(generateBillButton);
 
-        // Add Action Listeners
+        // Build dropdown windows
+        initDropSet(mobileDrop);
+        initDropSet(doctorDrop);
+
+        // Mobile selection → fill field + fetch patient
+        mobileDrop.list.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                String sel = mobileDrop.list.getSelectedValue();
+                if (sel != null) {
+                    ignoreMobile = true;
+                    mobileField.setText(sel);
+                    ignoreMobile = false;
+                    mobileDrop.win.setVisible(false);
+                    fetchPatientName();
+                }
+            }
+        });
+
+        // Doctor selection → fill field with ID only
+        doctorDrop.list.addMouseListener(new MouseAdapter() {
+            @Override public void mouseClicked(MouseEvent e) {
+                String sel = doctorDrop.list.getSelectedValue();
+                if (sel != null) {
+                    ignoreDoctor = true;
+                    doctorIdField.setText(sel.split(" - ")[0].trim());
+                    ignoreDoctor = false;
+                    doctorDrop.win.setVisible(false);
+                }
+            }
+        });
+
+        // DocumentListeners
+        mobileField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e)  { if (!ignoreMobile) SwingUtilities.invokeLater(() -> refreshMobile()); }
+            @Override public void removeUpdate(DocumentEvent e)  { if (!ignoreMobile) SwingUtilities.invokeLater(() -> refreshMobile()); }
+            @Override public void changedUpdate(DocumentEvent e) {}
+        });
+
+        doctorIdField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e)  { if (!ignoreDoctor) SwingUtilities.invokeLater(() -> refreshDoctor()); }
+            @Override public void removeUpdate(DocumentEvent e)  { if (!ignoreDoctor) SwingUtilities.invokeLater(() -> refreshDoctor()); }
+            @Override public void changedUpdate(DocumentEvent e) {}
+        });
+
+        // Enter on mobile triggers name lookup
+        mobileField.addActionListener(e -> fetchPatientName());
+
+        // Hide on frame move/deactivate
+        addComponentListener(new ComponentAdapter() {
+            @Override public void componentMoved(ComponentEvent e)   { hideAll(); }
+            @Override public void componentResized(ComponentEvent e) { hideAll(); }
+        });
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowDeactivated(WindowEvent e) { hideAll(); }
+        });
+
         addMedicineButton.addActionListener(e -> handleAddMedicine());
         resetButton.addActionListener(e -> resetFields());
         generateBillButton.addActionListener(e -> handleGenerateBill());
-        mobileField.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyReleased(KeyEvent e) {
-                fetchPatientName();
-            }
-        });
 
         setVisible(true);
     }
 
-    private void fetchPatientName() {
-        String mobileNumber = mobileField.getText().trim();
-        if (mobileNumber.length() == 10 && mobileNumber.matches("\\d{10}")) {
-            try {
-                String query = "SELECT name FROM Patient WHERE phone = ?";
-                PreparedStatement stmt = conn.prepareStatement(query);
-                stmt.setString(1, mobileNumber);
-                ResultSet rs = stmt.executeQuery();
+    // ---- Dropdown infrastructure ----
 
+    private void initDropSet(DropSet ds) {
+        ds.list.setFont(new Font("Arial", Font.PLAIN, 15));
+        ds.list.setFixedCellHeight(32);
+        ds.list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        ds.list.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> l, Object v,
+                    int i, boolean sel, boolean focus) {
+                JLabel lbl = (JLabel) super.getListCellRendererComponent(l, v, i, sel, focus);
+                lbl.setBackground(sel ? new Color(50, 150, 250) : Color.WHITE);
+                lbl.setForeground(sel ? Color.WHITE : Color.DARK_GRAY);
+                lbl.setBorder(BorderFactory.createEmptyBorder(0, 8, 0, 8));
+                return lbl;
+            }
+        });
+        JScrollPane sp = new JScrollPane(ds.list,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+            JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        sp.setBorder(BorderFactory.createLineBorder(new Color(150, 180, 230)));
+        ds.win = new JWindow(this);
+        ds.win.add(sp);
+        ds.win.setFocusableWindowState(false);
+    }
+
+    private void showDrop(DropSet ds, JTextField anchor) {
+        if (ds.model.isEmpty()) { ds.win.setVisible(false); return; }
+        Point p = anchor.getLocationOnScreen();
+        int h   = Math.min(ds.model.size() * 32 + 4, 164);
+        ds.win.setBounds(p.x, p.y + anchor.getHeight(), anchor.getWidth(), h);
+        ds.win.setVisible(true);
+        ds.win.toFront();
+    }
+
+    private void refreshMobile() {
+        String typed = mobileField.getText().trim();
+        mobileDrop.model.clear();
+        if (typed.isEmpty()) { mobileDrop.win.setVisible(false); return; }
+        try {
+            PreparedStatement st = conn.prepareStatement(
+                "SELECT phone FROM Patient WHERE phone LIKE ? ORDER BY phone LIMIT 8");
+            st.setString(1, typed + "%");
+            ResultSet rs = st.executeQuery();
+            while (rs.next()) mobileDrop.model.addElement(rs.getString("phone"));
+            rs.close(); st.close();
+        } catch (SQLException ex) { ex.printStackTrace(); }
+        showDrop(mobileDrop, mobileField);
+    }
+
+    private void refreshDoctor() {
+        String typed = doctorIdField.getText().trim();
+        doctorDrop.model.clear();
+        if (typed.isEmpty()) { doctorDrop.win.setVisible(false); return; }
+        try {
+            PreparedStatement st = conn.prepareStatement(
+                "SELECT doctor_id, name FROM Doctor WHERE CAST(doctor_id AS CHAR) LIKE ? ORDER BY doctor_id LIMIT 8");
+            st.setString(1, typed + "%");
+            ResultSet rs = st.executeQuery();
+            while (rs.next())
+                doctorDrop.model.addElement(rs.getInt("doctor_id") + " - " + rs.getString("name"));
+            rs.close(); st.close();
+        } catch (SQLException ex) { ex.printStackTrace(); }
+        showDrop(doctorDrop, doctorIdField);
+    }
+
+    private void hideAll() {
+        if (mobileDrop.win != null) mobileDrop.win.setVisible(false);
+        if (doctorDrop.win != null) doctorDrop.win.setVisible(false);
+    }
+
+    // ---- Business logic ----
+
+    private void fetchPatientName() {
+        String mob = mobileField.getText().trim();
+        if (mob.length() == 10 && mob.matches("\\d{10}")) {
+            try {
+                PreparedStatement st = conn.prepareStatement("SELECT name FROM Patient WHERE phone = ?");
+                st.setString(1, mob);
+                ResultSet rs = st.executeQuery();
                 if (rs.next()) {
                     NameLabel.setText(rs.getString("name"));
                     addMedicineButton.setEnabled(true);
@@ -147,11 +259,9 @@ public class IssueMedicine extends JFrame {
                     NameLabel.setText("Not Found");
                     addMedicineButton.setEnabled(false);
                 }
-                rs.close();
-                stmt.close();
+                rs.close(); st.close();
             } catch (SQLException ex) {
                 ex.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
                 addMedicineButton.setEnabled(false);
             }
         } else {
@@ -161,175 +271,108 @@ public class IssueMedicine extends JFrame {
     }
 
     private boolean validateDoctorId() {
-        String doctorId = doctorIdField.getText().trim();
-        if (doctorId.isEmpty() || !doctorId.matches("\\d+")) {
-            JOptionPane.showMessageDialog(this, "Invalid Doctor ID. Please enter a valid numeric ID.", "Input Error", JOptionPane.WARNING_MESSAGE);
+        String id = doctorIdField.getText().trim();
+        if (id.isEmpty() || !id.matches("\\d+")) {
+            JOptionPane.showMessageDialog(this, "Invalid Doctor ID.", "Input Error", JOptionPane.WARNING_MESSAGE);
             return false;
         }
-    
         try {
-            String query = "SELECT name FROM Doctor WHERE doctor_id = ?";
-            PreparedStatement stmt = conn.prepareStatement(query);
-            stmt.setInt(1, Integer.parseInt(doctorId));
-            ResultSet rs = stmt.executeQuery();
-    
-            if (rs.next()) {
-                // Doctor exists, validation passed
-                rs.close();
-                stmt.close();
-                return true;
-            } else {
-                // Doctor not found
-                JOptionPane.showMessageDialog(this, "Doctor ID not found in the database.", "Validation Error", JOptionPane.WARNING_MESSAGE);
-                rs.close();
-                stmt.close();
-                return false;
-            }
+            PreparedStatement st = conn.prepareStatement("SELECT name FROM Doctor WHERE doctor_id = ?");
+            st.setInt(1, Integer.parseInt(id));
+            ResultSet rs = st.executeQuery();
+            boolean found = rs.next();
+            rs.close(); st.close();
+            if (!found) JOptionPane.showMessageDialog(this, "Doctor ID not found.", "Validation Error", JOptionPane.WARNING_MESSAGE);
+            return found;
         } catch (SQLException ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "DB error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             return false;
         }
     }
-    
+
     private void handleAddMedicine() {
-        if (!validateDoctorId()) {
-            return; // Exit if the doctor ID is invalid
+        if (!validateDoctorId()) return;
+        String med = (String) medicineDropdown.getSelectedItem();
+        String qty = quantityField.getText().trim();
+        if (med == null || med.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please select a medicine.", "Input Error", JOptionPane.WARNING_MESSAGE); return;
         }
-        String selectedMedicine = (String) medicineDropdown.getSelectedItem();
-        String quantityText = quantityField.getText().trim();
-
-        if (selectedMedicine == null || selectedMedicine.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please select a medicine.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            return;
+        if (qty.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please enter a quantity.", "Input Error", JOptionPane.WARNING_MESSAGE); return;
         }
-
-        if (quantityText.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please enter a quantity.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
         try {
-            int quantity = Integer.parseInt(quantityText);
-
+            int quantity = Integer.parseInt(qty);
             if (quantity <= 0) {
-                JOptionPane.showMessageDialog(this, "Quantity must be a positive number.", "Input Error", JOptionPane.WARNING_MESSAGE);
-                return;
+                JOptionPane.showMessageDialog(this, "Quantity must be positive.", "Input Error", JOptionPane.WARNING_MESSAGE); return;
             }
-
-            // Check stock
-            String stockQuery = "SELECT stock_quantity FROM Medicine WHERE name = ?";
-            PreparedStatement stockStmt = conn.prepareStatement(stockQuery);
-            stockStmt.setString(1, selectedMedicine);
-            ResultSet stockRs = stockStmt.executeQuery();
-
-            if (stockRs.next()) {
-                int availableStock = stockRs.getInt("stock_quantity");
-
-                if (quantity > availableStock) {
+            PreparedStatement st = conn.prepareStatement("SELECT stock_quantity FROM Medicine WHERE name = ?");
+            st.setString(1, med);
+            ResultSet rs = st.executeQuery();
+            if (rs.next()) {
+                int stock = rs.getInt("stock_quantity");
+                if (quantity > stock) {
                     JOptionPane.showMessageDialog(this,
-                            "Insufficient stock for " + selectedMedicine + ". Only " + availableStock + " available.",
-                            "Stock Error", JOptionPane.WARNING_MESSAGE);
-                    return;
+                        "Insufficient stock for " + med + ". Only " + stock + " available.",
+                        "Stock Error", JOptionPane.WARNING_MESSAGE);
+                    rs.close(); st.close(); return;
                 }
-
-                // Medicine is valid, add to list
-                medications.add(selectedMedicine + " (" + quantity + ")");
+                medications.add(med + " (" + quantity + ")");
                 updateMedicationListDisplay();
-            } else {
-                JOptionPane.showMessageDialog(this, "Selected medicine not found in stock.", "Database Error", JOptionPane.ERROR_MESSAGE);
             }
-
-            stockRs.close();
-            stockStmt.close();
+            rs.close(); st.close();
             quantityField.setText("");
         } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "Invalid quantity entered. Please enter a valid number.", "Input Error", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Invalid quantity.", "Input Error", JOptionPane.WARNING_MESSAGE);
         } catch (SQLException ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "DB error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void handleGenerateBill() {
-        String mobileNumber = mobileField.getText().trim();
-        String doctorId = doctorIdField.getText().trim();
-    
-        if (mobileNumber.isEmpty() || !mobileNumber.matches("\\d{10}")) {
-            JOptionPane.showMessageDialog(this, "Invalid mobile number.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            return;
+        String mob = mobileField.getText().trim();
+        String did = doctorIdField.getText().trim();
+        if (mob.isEmpty() || !mob.matches("\\d{10}")) {
+            JOptionPane.showMessageDialog(this, "Invalid mobile number.", "Input Error", JOptionPane.WARNING_MESSAGE); return;
         }
-    
-        if (doctorId.isEmpty() || !doctorId.matches("\\d+")) {
-            JOptionPane.showMessageDialog(this, "Invalid Doctor ID.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            return;
+        if (did.isEmpty() || !did.matches("\\d+")) {
+            JOptionPane.showMessageDialog(this, "Invalid Doctor ID.", "Input Error", JOptionPane.WARNING_MESSAGE); return;
         }
-    
         if (medications.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No medicines added.", "Input Error", JOptionPane.WARNING_MESSAGE);
-            return;
+            JOptionPane.showMessageDialog(this, "No medicines added.", "Input Error", JOptionPane.WARNING_MESSAGE); return;
         }
-    
         try {
-            // Get patient_id from the database
-            String patientQuery = "SELECT patient_id FROM Patient WHERE phone = ?";
-            PreparedStatement patientStmt = conn.prepareStatement(patientQuery);
-            patientStmt.setString(1, mobileNumber);
-            ResultSet patientRs = patientStmt.executeQuery();
-    
-            if (!patientRs.next()) {
+            PreparedStatement pt = conn.prepareStatement("SELECT patient_id FROM Patient WHERE phone = ?");
+            pt.setString(1, mob);
+            ResultSet pr = pt.executeQuery();
+            if (!pr.next()) {
                 JOptionPane.showMessageDialog(this, "Patient not found.", "Input Error", JOptionPane.WARNING_MESSAGE);
-                patientRs.close();
-                patientStmt.close();
-                return;
+                pr.close(); pt.close(); return;
             }
-    
-            int patientId = patientRs.getInt("patient_id");
-            patientRs.close();
-            patientStmt.close();
-    
-            // Insert into Prescription table
-            String medicationString = String.join("; ", medications);
-            String prescriptionQuery = "INSERT INTO Prescription (doctor_id, patient_id, medication) VALUES (?, ?, ?)";
-            PreparedStatement prescriptionStmt = conn.prepareStatement(prescriptionQuery, Statement.RETURN_GENERATED_KEYS);
-            prescriptionStmt.setInt(1, Integer.parseInt(doctorId));
-            prescriptionStmt.setInt(2, patientId);
-            prescriptionStmt.setString(3, medicationString);
-    
-            int rowsInserted = prescriptionStmt.executeUpdate();
-    
-            if (rowsInserted > 0) {
-                ResultSet generatedKeys = prescriptionStmt.getGeneratedKeys();
-                if (generatedKeys.next()) {
-                    int prescriptionId = generatedKeys.getInt(1);
-                    generatedKeys.close();
-                    prescriptionStmt.close();
-    
-                    // Open BillPopup with the prescription_id
-                    new BillPopup(conn, prescriptionId);
-                } else {
-                    JOptionPane.showMessageDialog(this, "Failed to retrieve prescription ID.", "Database Error", JOptionPane.ERROR_MESSAGE);
-                    prescriptionStmt.close();
-                    return;
-                }
-            } else {
-                JOptionPane.showMessageDialog(this, "Failed to add prescription.", "Database Error", JOptionPane.ERROR_MESSAGE);
-                prescriptionStmt.close();
-                return;
+            int patientId = pr.getInt("patient_id");
+            pr.close(); pt.close();
+
+            PreparedStatement ps = conn.prepareStatement(
+                "INSERT INTO Prescription (doctor_id, patient_id, medication) VALUES (?, ?, ?)",
+                Statement.RETURN_GENERATED_KEYS);
+            ps.setInt(1, Integer.parseInt(did));
+            ps.setInt(2, patientId);
+            ps.setString(3, String.join("; ", medications));
+            ps.executeUpdate();
+
+            ResultSet keys = ps.getGeneratedKeys();
+            if (keys.next()) {
+                new BillPopup(conn, keys.getInt(1));
+                keys.close(); ps.close();
             }
         } catch (SQLException ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "DB error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
-    
 
     private void updateMedicationListDisplay() {
-        StringBuilder medicationText = new StringBuilder();
-        for (String medication : medications) {
-            medicationText.append(medication).append("\n");
-        }
-        medicationListArea.setText(medicationText.toString());
+        StringBuilder sb = new StringBuilder();
+        for (String m : medications) sb.append(m).append("\n");
+        medicationListArea.setText(sb.toString());
     }
 
     private void resetFields() {
@@ -338,59 +381,45 @@ public class IssueMedicine extends JFrame {
         quantityField.setText("");
         medications.clear();
         updateMedicationListDisplay();
-        patientNameLabel.setText("Patient Name: ");
+        NameLabel.setText("Not Found");
+        addMedicineButton.setEnabled(false);
     }
 
     private void populateMedicineDropdown() {
         try {
-            String query = "SELECT name FROM Medicine";
-            PreparedStatement stmt = conn.prepareStatement(query);
-            ResultSet rs = stmt.executeQuery();
-
-            while (rs.next()) {
-                medicineDropdown.addItem(rs.getString("name"));
-            }
-
-            rs.close();
-            stmt.close();
+            PreparedStatement st = conn.prepareStatement("SELECT name FROM Medicine");
+            ResultSet rs = st.executeQuery();
+            while (rs.next()) medicineDropdown.addItem(rs.getString("name"));
+            rs.close(); st.close();
         } catch (SQLException ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Database error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "DB error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
-    private JTextField createRoundedTextField() {
+    // ---- UI helpers ----
+
+    private void addLabel(JPanel p, String text, int x, int y, int w, int h) {
+        JLabel l = new JLabel(text);
+        l.setFont(new Font("Arial", Font.BOLD, 16));
+        l.setBounds(x, y, w, h);
+        p.add(l);
+    }
+
+    private JTextField roundedField() {
         return new JTextField() {
             @Override
             protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create();
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-                g2.setColor(new Color(245, 245, 245)); // Light gray background
+                g2.setColor(new Color(245, 245, 245));
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 20, 20);
-
-                g2.setColor(new Color(200, 200, 200)); // Light gray border
+                g2.setColor(new Color(200, 200, 200));
                 g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 20, 20);
-
                 super.paintComponent(g2);
                 g2.dispose();
             }
-
-            @Override
-            public void setBorder(Border border) {
-                // Disable default border
-            }
-
-            @Override
-            public Insets getInsets() {
-                return new Insets(5, 10, 5, 10);
-            }
+            @Override public void setBorder(Border b) {}
+            @Override public Insets getInsets() { return new Insets(5, 10, 5, 10); }
         };
-    }
-
-    private JLabel createLabel(String text) {
-        JLabel label = new JLabel(text);
-        label.setFont(new Font("Arial", Font.BOLD, 16));
-        return label;
     }
 }
