@@ -5,8 +5,8 @@
 bin/
 *.class
 
-# Dependency jars (keep lib/ tracked but ignore any local additions)
-lib/*.jar
+# Dependency jars are intentionally tracked (no build tool to fetch them)
+# lib/*.jar
 
 # IDE files
 .vscode/
